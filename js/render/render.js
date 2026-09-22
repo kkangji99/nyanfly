@@ -46,7 +46,6 @@ export function createView(canvas) {
 		camY: 0,
 		scale: 1,   // 카메라 추적용
 		zoom: 1,    // 실제로 그릴 때 쓰는 배율(펀치가 얹힌다)
-		shake: 0,
 		hitstop: 0,
 		punch: 0,
 		squash: 0,
@@ -126,13 +125,11 @@ function watchPhase(view, s) {
 
 	if (s.phase === PHASE_FLY && from === PHASE_POWER) {
 		sfxLaunch();
-		view.shake = 16;
 		view.punch = 0.22;
 		view.squash = 1;
 		dust(view, 20, terrainHeightAt(s.seed, 0) + 30, 26, 420);
 	} else if (s.phase !== PHASE_FLY && from === PHASE_FLY) {
 		sfxLand();
-		view.shake = 10;
 		dust(view, s.x, s.y, 18, 220);
 	}
 }
@@ -161,7 +158,6 @@ function consumeFx(view, s) {
 		if (f.quality > 0) {
 			spawnFloat(view, f.x, f.y + 40, f.perfect ? '완벽!' : '좋음',
 				f.perfect ? '#ffd166' : '#bfe3ff');
-			view.shake = Math.min(18, view.shake + (f.perfect ? 12 : 5));
 			// 맞은 순간 화면을 짧게 멈추고 카메라를 당긴다. 이게 때린 느낌을 만든다.
 			view.hitstop = Math.max(view.hitstop, f.perfect ? HITSTOP_PERFECT : HITSTOP_HIT);
 			view.punch = Math.max(view.punch, f.perfect ? PUNCH_PERFECT : PUNCH_HIT);
@@ -200,7 +196,6 @@ export function updateView(view, s, dt) {
 		f.life -= dt;
 		f.y += 70 * dt;
 	}
-	if (view.shake > 0) view.shake = Math.max(0, view.shake - dt * 46);
 	if (view.punch > 0) view.punch = Math.max(0, view.punch - dt * 0.9);
 	if (view.squash > 0) view.squash = Math.max(0, view.squash - dt * 5);
 	if (view.hitstop > 0) view.hitstop = Math.max(0, view.hitstop - dt);
@@ -234,7 +229,6 @@ export function updateView(view, s, dt) {
 		spawnFloat(view, s.x, s.y + 70, '최고 기록!', '#ffd166');
 		view.flash = 0.8;
 		view.punch = 0.2;
-		view.shake = 14;
 		sfxPerfect(12);
 		for (let k = 0; k < 28; k++) {
 			const a = (k / 28) * Math.PI * 2;
@@ -256,7 +250,6 @@ export function resetView(view) {
 	view.camY = 0;
 	view.scale = 1;
 	view.zoom = 1;
-	view.shake = 0;
 	view.hitstop = 0;
 	view.punch = 0;
 	view.squash = 0;
@@ -626,10 +619,6 @@ export function render(view, s) {
 	drawSky(view);
 
 	g.save();
-	if (view.shake > 0) {
-		g.translate((Math.random() - 0.5) * view.shake, (Math.random() - 0.5) * view.shake);
-	}
-
 	drawParallax(view);
 	drawTrees(view);
 	drawTerrain(view, s);

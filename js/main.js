@@ -83,12 +83,15 @@ function advance(dt) {
 				acc -= DT;
 			}
 		}
-		updateView(view, sim, dt);
 
 		const phase = sim.phase;
 		setHud(fmtDist(distanceM(sim)), progress.best, sim.combo, HINTS[phase]);
 		if (phase === PHASE_DONE) finishRun();
 	}
+
+	// 판이 끝난 뒤에도 계속 불러야 한다. 여기서 안 부르면 펀치·섬광·입자 같은
+	// 연출값이 마지막 프레임 값에 그대로 얼어붙는다.
+	updateView(view, sim, dt);
 
 	render(view, sim);
 }
