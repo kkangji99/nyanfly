@@ -1,9 +1,10 @@
 // 앱 진입점. 고정 타임스텝 시뮬과 가변 프레임 렌더를 이어 붙인다.
 
 import {
-	DT, PHASE_DONE,
+	DT, PHASE_AIM, PHASE_DONE, PHASE_POWER,
 	churuEarned, click, createSim, distanceM, step
 } from './sim/sim.js';
+import { isMuted, sfxBuy, sfxGauge, toggleMute, unlock } from './audio/sfx.js';
 import { MAX_LEVEL, UPGRADES, costOf } from './sim/upgrades.js';
 import { createView, render, resetView, resize, updateView } from './render/render.js';
 import { fetchTop, submit } from './net/leaderboard.js';
@@ -55,7 +56,11 @@ function finishRun() {
 
 // 입력은 한 곳으로 모은다. 마우스, 터치, 스페이스가 모두 같은 클릭이다.
 function onPress() {
+	// 브라우저는 사용자 조작 전에 소리를 막으므로 첫 입력에서 열어 준다.
+	unlock();
 	if (!playing) return;
+	// 게이지를 확정하는 소리. 발사 전 두 클릭에도 반응이 있어야 손맛이 산다.
+	if (sim.phase === PHASE_AIM || sim.phase === PHASE_POWER) sfxGauge();
 	click(sim);
 }
 
@@ -67,10 +72,14 @@ function advance(dt) {
 	if (dt > 0.25) dt = 0.25;
 
 	if (playing) {
-		acc += dt;
-		while (acc >= DT) {
-			step(sim);
-			acc -= DT;
+		// 히트스톱 중에는 시뮬을 세우고 화면만 움직인다. 맞은 순간이 눈에 박히게
+		// 하는 연출이다. 시뮬의 프레임 번호는 그대로이므로 리플레이에는 영향이 없다.
+		if (view.hitstop <= 0) {
+			acc += dt;
+			while (acc >= DT) {
+				step(sim);
+				acc -= DT;
+			}
 		}
 		updateView(view, sim, dt);
 
@@ -101,6 +110,7 @@ function buy(id) {
 	progress.churu -= cost;
 	progress.levels[id] = level + 1;
 	save(progress);
+	sfxBuy();
 	renderShop(progress, buy);
 }
 
@@ -182,6 +192,18 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('resize', () => resize(view));
 
+// 소리 토글. 캔버스 클릭으로 새지 않게 이벤트를 여기서 끊는다.
+function syncMuteLabel() {
+	dom.btnMute.textContent = isMuted() ? '소리 켜기' : '소리 끄기';
+}
+
+dom.btnMute.addEventListener('pointerdown', (e) => e.stopPropagation());
+dom.btnMute.addEventListener('click', (e) => {
+	e.stopPropagation();
+	toggleMute();
+	syncMuteLabel();
+});
+
 // --- 개발용 점검 창구 ---
 // 로컬에서만 붙인다. 배포된 페이지에서는 아무것도 노출하지 않는다.
 if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
@@ -199,6 +221,7 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
 // --- 시작 ---
 
 setTitle(progress);
+syncMuteLabel();
 dom.nickname.value = progress.nickname;
 showPanel(dom.title);
 requestAnimationFrame(frame);

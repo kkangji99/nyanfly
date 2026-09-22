@@ -41,7 +41,8 @@ export const dom = {
 	btnShopClose: el('btnShopClose'),
 	btnSubmit: el('btnSubmit'),
 	btnRankFromTitle: el('btnRankFromTitle'),
-	btnRankClose: el('btnRankClose')
+	btnRankClose: el('btnRankClose'),
+	btnMute: el('btnMute')
 };
 
 const PANELS = [dom.title, dom.result, dom.shop, dom.rank];

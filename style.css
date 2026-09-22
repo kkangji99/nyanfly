@@ -32,6 +32,23 @@ html, body {
 
 .hidden { display: none !important; }
 
+/* 소리 토글. 화면 위에 작게 얹는다. */
+.mute {
+	position: fixed;
+	top: max(12px, env(safe-area-inset-top));
+	right: 12px;
+	z-index: 5;
+	min-width: 0;
+	padding: 7px 11px;
+	border-radius: 9px;
+	background: rgba(43, 33, 24, 0.35);
+	color: #fff6e6;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.mute:hover:not(:disabled) { background: rgba(43, 33, 24, 0.55); }
+
 /* 플레이 중 표시 */
 .hud {
 	position: fixed;
