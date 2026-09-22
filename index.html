@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>nyanfly</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<!-- 플레이 중 표시 -->
+<div id="hud" class="hud hidden">
+	<div class="hud-row"><span id="hudDist">0 m</span></div>
+	<div class="hud-row small"><span id="hudBest">최고 0 m</span></div>
+	<div class="hud-row small" id="hudCombo"></div>
+	<div class="hud-hint" id="hudHint">각도를 정하세요</div>
+</div>
+
+<!-- 시작 화면 -->
+<section id="titleScreen" class="panel">
+	<h1>nyanfly</h1>
+	<p class="lead">냥이를 대포로 날려 멀리 보내는 게임.<br>버튼 하나로 각도, 파워, 그리고 공중에서의 타이밍을 잡습니다.</p>
+	<div class="howto">
+		<div><b>1</b> 클릭으로 각도 확정</div>
+		<div><b>2</b> 클릭으로 파워 확정</div>
+		<div><b>3</b> 구름·새·지면에 <b>닿는 순간</b> 클릭하면 가속</div>
+	</div>
+	<div class="stat-row">
+		<span>최고 기록 <b id="titleBest">0 m</b></span>
+		<span>츄르 <b id="titleChuru">0</b></span>
+	</div>
+	<div class="btn-row">
+		<button id="btnPlay" class="primary">발사 준비</button>
+		<button id="btnShopFromTitle">업그레이드</button>
+		<button id="btnRankFromTitle">랭킹</button>
+	</div>
+</section>
+
+<!-- 결과 화면 -->
+<section id="resultScreen" class="panel hidden">
+	<h2>착지!</h2>
+	<div class="result-dist"><b id="resDist">0</b><span id="resUnit"> m</span></div>
+	<div id="resNew" class="new-record hidden">최고 기록 경신!</div>
+	<ul class="result-list">
+		<li>완벽 타이밍 <b id="resPerfect">0</b></li>
+		<li>최고 콤보 <b id="resCombo">0</b></li>
+		<li>획득 츄르 <b id="resChuru">0</b></li>
+	</ul>
+	<div class="btn-row">
+		<button id="btnRetry" class="primary">한 번 더</button>
+		<button id="btnShop">업그레이드</button>
+		<button id="btnSubmit">랭킹 등록</button>
+	</div>
+</section>
+
+<!-- 업그레이드 상점 -->
+<section id="shopScreen" class="panel hidden">
+	<h2>업그레이드</h2>
+	<div class="stat-row"><span>보유 츄르 <b id="shopChuru">0</b></span></div>
+	<div id="shopList" class="shop-list"></div>
+	<div class="btn-row">
+		<button id="btnShopClose" class="primary">돌아가기</button>
+	</div>
+</section>
+
+<!-- 랭킹 -->
+<section id="rankScreen" class="panel hidden">
+	<h2>랭킹</h2>
+	<div class="rank-name">
+		<label for="nickname">닉네임</label>
+		<input id="nickname" type="text" maxlength="12" placeholder="익명냥" autocomplete="off">
+	</div>
+	<ol id="rankList" class="rank-list"></ol>
+	<p id="rankNote" class="note"></p>
+	<div class="btn-row">
+		<button id="btnRankClose" class="primary">돌아가기</button>
+	</div>
+</section>
+
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
