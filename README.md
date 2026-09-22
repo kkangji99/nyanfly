@@ -44,7 +44,11 @@ tests/      시뮬 테스트
 ```bash
 node --test tests/sim.test.mjs   # 결정론·리플레이·밸런스 테스트
 node tools/balance.mjs           # 각도·레벨별 기록 분포
+node tools/perf.mjs              # 시뮬 비용, 기록 검증 비용
 ```
+
+렌더 비용은 브라우저에서 **P 키**를 눌러 계측 표시를 켜서 본다. 창이 숨겨져 있으면
+브라우저가 그리기를 건너뛰어 측정값이 의미 없다.
 
 ## 랭킹 (선택)
 

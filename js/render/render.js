@@ -35,6 +35,22 @@ const PREVIEW_STRIDE = 7;      // 점 사이 간격(시뮬 프레임)
 const GRASS_STEP = 140;        // 풀 다발 간격(px)
 const TREE_STEP = 620;         // 배경 나무 간격(px)
 const POST_STEP = 1000;        // 거리 표지 간격(px) = 100m
+const TERRAIN_CAP = 640;       // 한 프레임에 찍는 지형 표본 상한
+const POST_FONT = 'bold 13px system-ui, sans-serif';
+
+// 매 프레임 쓰는 짧은 문자열은 미리 만들어 둔다. 프레임 안에서 새로 만들지 않는다.
+const POST_LABELS = [];
+function postLabel(i) {
+	let t = POST_LABELS[i];
+	if (t === undefined) {
+		t = i * 100 + 'm';
+		POST_LABELS[i] = t;
+	}
+	return t;
+}
+
+const ANGLE_LABELS = [];
+for (let i = 0; i < 90; i++) ANGLE_LABELS[i] = i + '도';
 
 export function createView(canvas) {
 	const view = {
@@ -55,6 +71,10 @@ export function createView(canvas) {
 		bestPassed: false,
 		preview: new Float32Array(PREVIEW_POINTS * 2),
 		previewN: 0,
+		// 지형 표본. 프레임당 한 번 채우고 채우기·잔디·장식이 같이 쓴다.
+		tx: new Float32Array(TERRAIN_CAP),
+		ty: new Float32Array(TERRAIN_CAP),
+		tn: 0,
 		// 풀을 미리 만들어 두고 돌려 쓴다. 매 프레임 새 객체를 만들지 않는다.
 		parts: new Array(PARTICLE_CAP),
 		partHead: 0,
@@ -313,14 +333,22 @@ function drawTerrain(view, s) {
 	const g = view.g;
 	const left = view.camX - (view.w * 0.42) / view.zoom - NODE_W;
 	const right = left + view.w / view.zoom + NODE_W * 2;
-	const step = 6 / view.zoom;
+	// 표본 간격은 6px을 목표로 하되 상한을 넘지 않게 벌린다.
+	const step = Math.max(6 / view.zoom, (right - left) / (TERRAIN_CAP - 1));
+
+	// 지형 높이를 한 번만 계산해 둔다. 아래 잔디 띠도 이 표본을 그대로 쓴다.
+	let n = 0;
+	for (let wx = left; wx <= right && n < TERRAIN_CAP; wx += step) {
+		view.tx[n] = sx(view, wx);
+		view.ty[n] = sy(view, terrainHeightAt(s.seed, wx));
+		n++;
+	}
+	view.tn = n;
 
 	g.beginPath();
-	g.moveTo(sx(view, left), view.h + 2);
-	for (let wx = left; wx <= right; wx += step) {
-		g.lineTo(sx(view, wx), sy(view, terrainHeightAt(s.seed, wx)));
-	}
-	g.lineTo(sx(view, right), view.h + 2);
+	g.moveTo(view.tx[0], view.h + 2);
+	for (let i = 0; i < n; i++) g.lineTo(view.tx[i], view.ty[i]);
+	g.lineTo(view.tx[n - 1], view.h + 2);
 	g.closePath();
 	// 위는 흙, 아래로 갈수록 어두워지게 해서 갈색 덩어리로 보이지 않게 한다.
 	const soil = g.createLinearGradient(0, sy(view, 400), 0, view.h);
@@ -330,14 +358,10 @@ function drawTerrain(view, s) {
 	g.fillStyle = soil;
 	g.fill();
 
-	// 잔디 선
+	// 잔디 띠. 위에서 계산해 둔 표본을 재사용한다.
 	g.beginPath();
-	let first = true;
-	for (let wx = left; wx <= right; wx += step) {
-		const px = sx(view, wx);
-		const py = sy(view, terrainHeightAt(s.seed, wx));
-		if (first) { g.moveTo(px, py); first = false; } else { g.lineTo(px, py); }
-	}
+	g.moveTo(view.tx[0], view.ty[0]);
+	for (let i = 1; i < n; i++) g.lineTo(view.tx[i], view.ty[i]);
 	g.strokeStyle = '#5f9e5a';
 	g.lineWidth = Math.max(6, 18 * view.zoom);
 	g.stroke();
@@ -392,7 +416,8 @@ function drawSpeedLines(view, s) {
 	if (speed < SPEED_LINE_FROM) return;
 	const g = view.g;
 	const t = Math.min(1, (speed - SPEED_LINE_FROM) / 2200);
-	g.strokeStyle = `rgba(255,255,255,${0.1 + t * 0.3})`;
+	g.strokeStyle = '#ffffff';
+	g.globalAlpha = 0.1 + t * 0.3;
 	g.lineWidth = 2;
 	g.beginPath();
 	for (let i = 0; i < 9; i++) {
@@ -404,6 +429,7 @@ function drawSpeedLines(view, s) {
 		g.lineTo(x + len, y);
 	}
 	g.stroke();
+	g.globalAlpha = 1;
 }
 
 function drawParticles(view) {
@@ -482,7 +508,7 @@ function drawGroundDetail(view, s) {
 	const post = postSprite();
 	const pw = post.width * view.zoom;
 	const ph = post.height * view.zoom;
-	g.font = `bold ${Math.max(10, 14 * view.zoom)}px system-ui, sans-serif`;
+	g.font = POST_FONT;
 	g.textAlign = 'center';
 	for (let i = Math.max(1, Math.floor(left / POST_STEP)); i <= Math.floor(right / POST_STEP); i++) {
 		const wx = i * POST_STEP;
@@ -490,7 +516,7 @@ function drawGroundDetail(view, s) {
 		const py = sy(view, terrainHeightAt(s.seed, wx));
 		g.drawImage(post, px - pw / 2, py - ph, pw, ph);
 		g.fillStyle = 'rgba(58,42,30,0.75)';
-		g.fillText(`${i * 100}m`, px, py - ph - 4);
+		g.fillText(postLabel(i), px, py - ph - 4);
 	}
 	g.textAlign = 'left';
 
@@ -512,14 +538,16 @@ function drawGroundDetail(view, s) {
 function drawPreview(view) {
 	if (view.previewN < 2) return;
 	const g = view.g;
+	g.fillStyle = '#ffffff';
 	for (let i = 0; i < view.previewN; i++) {
 		const t = 1 - i / view.previewN;
-		g.fillStyle = `rgba(255,255,255,${0.15 + t * 0.5})`;
+		g.globalAlpha = 0.15 + t * 0.5;
 		g.beginPath();
 		g.arc(sx(view, view.preview[i * 2]), sy(view, view.preview[i * 2 + 1]),
 			Math.max(1.5, (2 + t * 2) * view.zoom), 0, Math.PI * 2);
 		g.fill();
 	}
+	g.globalAlpha = 1;
 }
 
 // 대포. 받침은 고정이고 포신만 조준 각도로 돌아간다.
@@ -559,7 +587,7 @@ function drawAim(view, s) {
 		g.fillStyle = 'rgba(255,255,255,0.95)';
 		g.strokeStyle = 'rgba(0,0,0,0.4)';
 		g.lineWidth = 3;
-		const label = `${Math.round(aimAngleDeg(s.aimIndex))}도`;
+		const label = ANGLE_LABELS[Math.round(aimAngleDeg(s.aimIndex))];
 		g.strokeText(label, view.w / 2, view.h - 100);
 		g.fillText(label, view.w / 2, view.h - 100);
 		g.textAlign = 'left';
@@ -643,7 +671,9 @@ export function render(view, s) {
 
 	// 완벽 판정 순간의 섬광. 흔들림 바깥에 그려야 화면 전체가 같이 번쩍인다.
 	if (view.flash > 0) {
-		g.fillStyle = `rgba(255,255,255,${view.flash * 0.45})`;
+		g.fillStyle = '#ffffff';
+		g.globalAlpha = view.flash * 0.45;
 		g.fillRect(0, 0, view.w, view.h);
+		g.globalAlpha = 1;
 	}
 }

@@ -93,7 +93,61 @@ function advance(dt) {
 	// 연출값이 마지막 프레임 값에 그대로 얼어붙는다.
 	updateView(view, sim, dt);
 
-	render(view, sim);
+	if (perfOn) {
+		const t0 = performance.now();
+		render(view, sim);
+		sampleFrame(performance.now() - t0, dt);
+	} else {
+		render(view, sim);
+	}
+}
+
+// --- 계측 (P 키) ---
+// render() 소요 시간은 창이 실제로 보이는 상태에서만 의미가 있다. 탭이 숨겨져 있으면
+// 브라우저가 그리기를 건너뛰어 0에 가까운 값이 나온다.
+const PERF_N = 120;
+const perfRender = new Float32Array(PERF_N);
+const perfFrame = new Float32Array(PERF_N);
+let perfHead = 0;
+let perfOn = false;
+let perfShownAt = 0;
+
+function sampleFrame(renderMs, dt) {
+	const i = perfHead % PERF_N;
+	perfRender[i] = renderMs;
+	perfFrame[i] = dt * 1000;
+	perfHead++;
+
+	// 표시는 4프레임에 한 번만 갱신한다. 계측 자체가 비용이 되면 안 된다.
+	if (perfHead - perfShownAt < 4) return;
+	perfShownAt = perfHead;
+
+	const n = Math.min(PERF_N, perfHead);
+	let rSum = 0, rMax = 0, fSum = 0;
+	for (let k = 0; k < n; k++) {
+		rSum += perfRender[k];
+		if (perfRender[k] > rMax) rMax = perfRender[k];
+		fSum += perfFrame[k];
+	}
+	const rAvg = rSum / n;
+	const fAvg = fSum / n;
+	let alive = 0;
+	for (let k = 0; k < view.parts.length; k++) if (view.parts[k].life > 0) alive++;
+
+	// 계측 표시는 켰을 때만 4프레임마다 만들므로 문자열을 새로 만들어도 괜찮다.
+	dom.perf.textContent = `render  ${rAvg.toFixed(2)} ms  (최대 ${rMax.toFixed(2)})
+frame   ${fAvg.toFixed(2)} ms  ${(1000 / fAvg).toFixed(0)} fps
+예산    16.67 ms 중 ${(rAvg / 16.67 * 100).toFixed(1)}%
+입자    ${alive} / ${view.parts.length}
+지형표본 ${view.tn}   배율 ${view.zoom.toFixed(2)}`;
+}
+
+function togglePerf() {
+	perfOn = !perfOn;
+	perfHead = 0;
+	perfShownAt = 0;
+	dom.perf.classList.toggle('hidden', !perfOn);
+	if (perfOn) dom.perf.textContent = '측정 중...';
 }
 
 function frame(ms) {
@@ -186,6 +240,10 @@ dom.stage.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+	if (e.code === 'KeyP' && !(document.activeElement && document.activeElement.tagName === 'INPUT')) {
+		togglePerf();
+		return;
+	}
 	if (e.code !== 'Space' && e.code !== 'Enter') return;
 	// 입력란에 글자를 넣는 중이면 게임 입력으로 쓰지 않는다.
 	if (document.activeElement && document.activeElement.tagName === 'INPUT') return;

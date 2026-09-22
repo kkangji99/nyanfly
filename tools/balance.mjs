@@ -6,7 +6,7 @@ import {
 } from '../js/sim/sim.js';
 import { emptyLevels, UPGRADES, MAX_LEVEL } from '../js/sim/upgrades.js';
 
-function levelsAt(n) {
+export function levelsAt(n) {
 	const l = emptyLevels();
 	for (const u of UPGRADES) l[u.id] = Math.min(n, MAX_LEVEL);
 	return l;

@@ -42,7 +42,8 @@ export const dom = {
 	btnSubmit: el('btnSubmit'),
 	btnRankFromTitle: el('btnRankFromTitle'),
 	btnRankClose: el('btnRankClose'),
-	btnMute: el('btnMute')
+	btnMute: el('btnMute'),
+	perf: el('perf')
 };
 
 const PANELS = [dom.title, dom.result, dom.shop, dom.rank];
