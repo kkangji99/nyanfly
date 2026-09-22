@@ -7,10 +7,11 @@ import {
 } from '../sim/world.js';
 import {
 	FX_BIRD, FX_CLOUD, FX_RING,
-	PHASE_AIM, PHASE_FLY, PHASE_POWER, aimAngleDeg
+	PHASE_AIM, PHASE_FLY, PHASE_POWER, aimAngleDeg, previewPath
 } from '../sim/sim.js';
 import {
-	birdSprite, cannonSprite, catSprite, cloudSprite, hillSprite, ringSprite
+	birdSprite, cannonBarrelSprite, cannonBaseSprite, catSprite, cloudSprite,
+	flagSprite, grassSprite, hillSprite, postSprite, ringSprite, treeSprite
 } from './sprites.js';
 import {
 	sfxBird, sfxBounce, sfxCloud, sfxGood, sfxLand, sfxLaunch, sfxPerfect, sfxRing
@@ -29,6 +30,11 @@ const HITSTOP_HIT = 0.035;
 const PUNCH_PERFECT = 0.16;
 const PUNCH_HIT = 0.07;
 const SPEED_LINE_FROM = 900;   // 이 속도(px/s)부터 속도선을 그린다
+const PREVIEW_POINTS = 26;     // 조준 궤적에 찍는 점 개수
+const PREVIEW_STRIDE = 7;      // 점 사이 간격(시뮬 프레임)
+const GRASS_STEP = 140;        // 풀 다발 간격(px)
+const TREE_STEP = 620;         // 배경 나무 간격(px)
+const POST_STEP = 1000;        // 거리 표지 간격(px) = 100m
 
 export function createView(canvas) {
 	const view = {
@@ -45,6 +51,11 @@ export function createView(canvas) {
 		punch: 0,
 		squash: 0,
 		prevPhase: -1,
+		flash: 0,
+		best: 0,        // 최고 기록(m). 깃발을 꽂는 위치
+		bestPassed: false,
+		preview: new Float32Array(PREVIEW_POINTS * 2),
+		previewN: 0,
 		// 풀을 미리 만들어 두고 돌려 쓴다. 매 프레임 새 객체를 만들지 않는다.
 		parts: new Array(PARTICLE_CAP),
 		partHead: 0,
@@ -155,6 +166,7 @@ function consumeFx(view, s) {
 			view.hitstop = Math.max(view.hitstop, f.perfect ? HITSTOP_PERFECT : HITSTOP_HIT);
 			view.punch = Math.max(view.punch, f.perfect ? PUNCH_PERFECT : PUNCH_HIT);
 			view.squash = 1;
+			if (f.perfect) view.flash = 0.55;
 			if (f.perfect) sfxPerfect(s.combo); else sfxGood();
 
 			// 완벽하면 사방으로 고르게 퍼지는 링을 한 겹 더 뿌린다.
@@ -192,6 +204,7 @@ export function updateView(view, s, dt) {
 	if (view.punch > 0) view.punch = Math.max(0, view.punch - dt * 0.9);
 	if (view.squash > 0) view.squash = Math.max(0, view.squash - dt * 5);
 	if (view.hitstop > 0) view.hitstop = Math.max(0, view.hitstop - dt);
+	if (view.flash > 0) view.flash = Math.max(0, view.flash - dt * 3.2);
 
 	if (s.phase === PHASE_FLY) {
 		const i = (view.trailHead % TRAIL_N) * 2;
@@ -215,6 +228,25 @@ export function updateView(view, s, dt) {
 	view.camX += (targetX - view.camX) * k;
 	view.camY += (targetY - view.camY) * k;
 
+	// 깃발을 넘는 순간. 화면 전체로 알린다.
+	if (!view.bestPassed && view.best > 0 && s.phase === PHASE_FLY && s.maxX / 10 > view.best) {
+		view.bestPassed = true;
+		spawnFloat(view, s.x, s.y + 70, '최고 기록!', '#ffd166');
+		view.flash = 0.8;
+		view.punch = 0.2;
+		view.shake = 14;
+		sfxPerfect(12);
+		for (let k = 0; k < 28; k++) {
+			const a = (k / 28) * Math.PI * 2;
+			spawnParticle(view, s.x, s.y, Math.cos(a) * 520, Math.sin(a) * 520, 0.45, 4, '#ffd166');
+		}
+	}
+
+	// 조준 단계에서만 궤적을 미리 계산한다. 비행이 시작되면 필요 없다.
+	view.previewN = (s.phase === PHASE_AIM || s.phase === PHASE_POWER)
+		? previewPath(s, view.preview, PREVIEW_POINTS, PREVIEW_STRIDE)
+		: 0;
+
 	// 실제로 그릴 때 쓰는 배율. 카메라 펀치가 여기에 얹힌다.
 	view.zoom = view.scale * (1 + view.punch);
 }
@@ -229,6 +261,9 @@ export function resetView(view) {
 	view.punch = 0;
 	view.squash = 0;
 	view.prevPhase = -1;
+	view.flash = 0;
+	view.bestPassed = false;
+	view.previewN = 0;
 	view.fxSeen = 0;
 	view.trailHead = 0;
 	view.trail.fill(0);
@@ -294,7 +329,12 @@ function drawTerrain(view, s) {
 	}
 	g.lineTo(sx(view, right), view.h + 2);
 	g.closePath();
-	g.fillStyle = '#8a6b4a';
+	// 위는 흙, 아래로 갈수록 어두워지게 해서 갈색 덩어리로 보이지 않게 한다.
+	const soil = g.createLinearGradient(0, sy(view, 400), 0, view.h);
+	soil.addColorStop(0, '#9c7b55');
+	soil.addColorStop(0.45, '#7d6142');
+	soil.addColorStop(1, '#5d4730');
+	g.fillStyle = soil;
 	g.fill();
 
 	// 잔디 선
@@ -305,8 +345,11 @@ function drawTerrain(view, s) {
 		const py = sy(view, terrainHeightAt(s.seed, wx));
 		if (first) { g.moveTo(px, py); first = false; } else { g.lineTo(px, py); }
 	}
-	g.strokeStyle = '#7fb069';
-	g.lineWidth = Math.max(3, 9 * view.zoom);
+	g.strokeStyle = '#5f9e5a';
+	g.lineWidth = Math.max(6, 18 * view.zoom);
+	g.stroke();
+	g.strokeStyle = '#7fc069';
+	g.lineWidth = Math.max(3, 7 * view.zoom);
 	g.stroke();
 }
 
@@ -408,25 +451,126 @@ function drawFloats(view) {
 	g.textAlign = 'left';
 }
 
+// 앞쪽 언덕 위에 나무를 흩뿌린다. 간격이 일정해도 시드로 높이를 흔들면 자연스럽다.
+function drawTrees(view) {
+	const g = view.g;
+	const img = treeSprite();
+	const factor = 0.28;   // 앞쪽 언덕과 같은 시차
+	const camp = view.camX * factor;
+	const from = Math.floor((camp - img.width) / TREE_STEP);
+	const to = Math.floor((camp + view.w + img.width) / TREE_STEP);
+	const top = view.h * 0.70;
+	for (let i = from; i <= to; i++) {
+		const x = i * TREE_STEP - camp;
+		// 같은 나무가 반복돼 보이지 않게 크기를 조금씩 바꾼다.
+		const k = 0.7 + ((i * 2654435761) >>> 0) / 4294967296 * 0.5;
+		g.drawImage(img, x, top - img.height * k + 18, img.width * k, img.height * k);
+	}
+}
+
+// 지면 장식: 풀 다발, 100m 표지, 최고 기록 깃발. 전부 보이는 구간만 그린다.
+function drawGroundDetail(view, s) {
+	const g = view.g;
+	const left = view.camX - (view.w * 0.42) / view.zoom;
+	const right = left + view.w / view.zoom;
+
+	const grass = grassSprite();
+	const gw = grass.width * view.zoom;
+	const gh2 = grass.height * view.zoom;
+	for (let i = Math.floor(left / GRASS_STEP); i <= Math.floor(right / GRASS_STEP); i++) {
+		const wx = i * GRASS_STEP;
+		if (wx < 0) continue;
+		const px = sx(view, wx);
+		const py = sy(view, terrainHeightAt(s.seed, wx));
+		g.drawImage(grass, px - gw / 2, py - gh2 + 2, gw, gh2);
+	}
+
+	// 거리 표지. 숫자를 같이 적어 어디까지 왔는지 바로 읽힌다.
+	const post = postSprite();
+	const pw = post.width * view.zoom;
+	const ph = post.height * view.zoom;
+	g.font = `bold ${Math.max(10, 14 * view.zoom)}px system-ui, sans-serif`;
+	g.textAlign = 'center';
+	for (let i = Math.max(1, Math.floor(left / POST_STEP)); i <= Math.floor(right / POST_STEP); i++) {
+		const wx = i * POST_STEP;
+		const px = sx(view, wx);
+		const py = sy(view, terrainHeightAt(s.seed, wx));
+		g.drawImage(post, px - pw / 2, py - ph, pw, ph);
+		g.fillStyle = 'rgba(58,42,30,0.75)';
+		g.fillText(`${i * 100}m`, px, py - ph - 4);
+	}
+	g.textAlign = 'left';
+
+	// 최고 기록 깃발. 이걸 넘는 순간이 눈에 보인다.
+	if (view.best > 0) {
+		const wx = view.best * 10;
+		if (wx >= left && wx <= right) {
+			const flag = flagSprite();
+			const fw = flag.width * view.zoom;
+			const fh = flag.height * view.zoom;
+			const px = sx(view, wx);
+			const py = sy(view, terrainHeightAt(s.seed, wx));
+			g.drawImage(flag, px - 9 * view.zoom, py - fh, fw, fh);
+		}
+	}
+}
+
+// 손대지 않았을 때의 궤적을 점선으로 보여준다. 조준이 감이 아니라 판단이 된다.
+function drawPreview(view) {
+	if (view.previewN < 2) return;
+	const g = view.g;
+	for (let i = 0; i < view.previewN; i++) {
+		const t = 1 - i / view.previewN;
+		g.fillStyle = `rgba(255,255,255,${0.15 + t * 0.5})`;
+		g.beginPath();
+		g.arc(sx(view, view.preview[i * 2]), sy(view, view.preview[i * 2 + 1]),
+			Math.max(1.5, (2 + t * 2) * view.zoom), 0, Math.PI * 2);
+		g.fill();
+	}
+}
+
+// 대포. 받침은 고정이고 포신만 조준 각도로 돌아간다.
+function drawCannon(view, s) {
+	const g = view.g;
+	const groundY = sy(view, terrainHeightAt(s.seed, 0));
+	const base = cannonBaseSprite();
+	const barrel = cannonBarrelSprite();
+	const bw = base.width * view.zoom;
+	const bh = base.height * view.zoom;
+	// 포신 회전축은 받침 위쪽 가운데다.
+	const pivotX = sx(view, 0);
+	const pivotY = groundY - bh * 0.55;
+
+	const deg = s.phase === PHASE_AIM ? aimAngleDeg(s.aimIndex)
+		: s.phase === PHASE_POWER ? s.lockedAngle
+		: s.lockedAngle || 40;
+
+	g.save();
+	g.translate(pivotX, pivotY);
+	g.rotate(-deg * Math.PI / 180);
+	g.scale(view.zoom, view.zoom);
+	// 회전축을 스프라이트의 왼쪽 허브에 맞춘다.
+	g.drawImage(barrel, -10, -barrel.height / 2);
+	g.restore();
+
+	g.drawImage(base, pivotX - bw / 2, groundY - bh + 6 * view.zoom, bw, bh);
+}
+
 // 조준·파워 게이지. 시뮬이 프레임 번호로 정한 값을 그대로 보여준다.
 function drawAim(view, s) {
 	const g = view.g;
-	const px = sx(view, 0);
-	const py = sy(view, terrainHeightAt(s.seed, 0) + 24);
-	const deg = s.phase === PHASE_AIM ? aimAngleDeg(s.aimIndex) : s.lockedAngle;
-	const rad = deg * Math.PI / 180;
-	const len = (90 + (s.phase === PHASE_POWER ? s.powerIndex : 0) * 1.1) * view.zoom;
-
-	g.save();
-	g.translate(px, py);
-	g.strokeStyle = s.phase === PHASE_POWER ? '#e4572e' : '#ffd166';
-	g.lineWidth = 7 * view.zoom;
-	g.lineCap = 'round';
-	g.beginPath();
-	g.moveTo(0, 0);
-	g.lineTo(Math.cos(rad) * len, -Math.sin(rad) * len);
-	g.stroke();
-	g.restore();
+	// 각도는 포신이, 궤적은 점선이 보여준다. 여기서는 각도 숫자와 파워만 알린다.
+	if (s.phase === PHASE_AIM) {
+		g.font = 'bold 15px system-ui, sans-serif';
+		g.textAlign = 'center';
+		g.fillStyle = 'rgba(255,255,255,0.95)';
+		g.strokeStyle = 'rgba(0,0,0,0.4)';
+		g.lineWidth = 3;
+		const label = `${Math.round(aimAngleDeg(s.aimIndex))}도`;
+		g.strokeText(label, view.w / 2, view.h - 100);
+		g.fillText(label, view.w / 2, view.h - 100);
+		g.textAlign = 'left';
+	}
 
 	if (s.phase === PHASE_POWER) {
 		const bw = 240, bh = 18;
@@ -460,6 +604,8 @@ function drawTimingRing(view, s) {
 
 // 냥이. 부딪히면 납작해지고 빠르면 진행 방향으로 늘어난다.
 function drawCat(view, s) {
+	// 발사 전에는 포신 안에 들어가 있다. 대포와 겹쳐 보이지 않게 숨긴다.
+	if (s.phase === PHASE_AIM || s.phase === PHASE_POWER) return;
 	const g = view.g;
 	const cat = catSprite();
 	const speed = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
@@ -485,25 +631,30 @@ export function render(view, s) {
 	}
 
 	drawParallax(view);
+	drawTrees(view);
 	drawTerrain(view, s);
+	drawGroundDetail(view, s);
 	drawObjects(view, s);
 	if (s.phase === PHASE_FLY) {
 		drawTrail(view);
 		drawSpeedLines(view, s);
 	}
 
-	// 대포
-	const cannon = cannonSprite();
-	const cw = cannon.width * view.zoom;
-	const ch = cannon.height * view.zoom;
-	g.drawImage(cannon, sx(view, 0) - cw / 2,
-		sy(view, terrainHeightAt(s.seed, 0)) - ch + 6 * view.zoom, cw, ch);
-
-	if (s.phase === PHASE_AIM || s.phase === PHASE_POWER) drawAim(view, s);
+	drawCannon(view, s);
+	if (s.phase === PHASE_AIM || s.phase === PHASE_POWER) {
+		drawPreview(view);
+		drawAim(view, s);
+	}
 
 	drawCat(view, s);
 	drawTimingRing(view, s);
 	drawParticles(view);
 	drawFloats(view);
 	g.restore();
+
+	// 완벽 판정 순간의 섬광. 흔들림 바깥에 그려야 화면 전체가 같이 번쩍인다.
+	if (view.flash > 0) {
+		g.fillStyle = `rgba(255,255,255,${view.flash * 0.45})`;
+		g.fillRect(0, 0, view.w, view.h);
+	}
 }

@@ -31,6 +31,8 @@ function newSeed() {
 function startRun() {
 	sim = createSim(newSeed(), progress.levels);
 	resetView(view);
+	// 최고 기록 지점에 깃발을 꽂아 두면 그걸 넘는 순간이 눈에 보인다.
+	view.best = progress.best;
 	acc = 0;
 	playing = true;
 	submitted = false;

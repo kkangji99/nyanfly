@@ -69,11 +69,30 @@ export function setTitle(progress) {
 	dom.titleChuru.textContent = String(progress.churu);
 }
 
+let countTimer = 0;
+
+// 결과 숫자를 0에서 세어 올린다. 결과 화면이 그냥 뜨는 것보다 훨씬 후하게 느껴진다.
+function countUp(distance) {
+	cancelAnimationFrame(countTimer);
+	const km = distance >= 1000;
+	dom.resUnit.textContent = km ? ' km' : ' m';
+	// 최종값을 먼저 써 둔다. 탭이 숨겨져 rAF가 돌지 않으면 애니메이션 없이도
+	// 올바른 숫자가 보인다.
+	dom.resDist.textContent = km ? (distance / 1000).toFixed(2) : String(Math.floor(distance));
+	const dur = 600;
+	const t0 = performance.now();
+	const tick = (now) => {
+		const t = Math.min(1, (now - t0) / dur);
+		// 끝에서 부드럽게 멈추게 한다.
+		const v = distance * (1 - (1 - t) * (1 - t) * (1 - t));
+		dom.resDist.textContent = km ? (v / 1000).toFixed(2) : String(Math.floor(v));
+		if (t < 1) countTimer = requestAnimationFrame(tick);
+	};
+	countTimer = requestAnimationFrame(tick);
+}
+
 export function setResult(distance, perfects, combo, churu, isNew) {
-	dom.resDist.textContent = distance >= 1000
-		? (distance / 1000).toFixed(2)
-		: String(Math.floor(distance));
-	dom.resUnit.textContent = distance >= 1000 ? ' km' : ' m';
+	countUp(distance);
 	dom.resPerfect.textContent = String(perfects);
 	dom.resCombo.textContent = String(combo);
 	dom.resChuru.textContent = String(churu);

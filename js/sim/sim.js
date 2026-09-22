@@ -331,3 +331,40 @@ export function replay(seed, levels, inputs) {
 	}
 	return s;
 }
+
+// 조준 궤적 미리보기. 시뮬 상태를 전혀 건드리지 않는 순수 함수다.
+// 렌더가 물리 상수를 베껴 쓰지 않도록 여기에 둔다. 공중 오브젝트와 보너스는
+// 계산하지 않으므로 "손대지 않았을 때의 궤적"을 보여준다.
+//
+// out에 (x, y) 쌍을 채우고 채운 점 개수를 돌려준다. 매 프레임 호출되므로
+// 배열을 새로 만들지 않고 호출자가 준 것을 쓴다.
+export function previewPath(s, out, maxPoints, framesPerPoint) {
+	// 조준 단계에서는 파워를 아직 안 정했으므로 최대 파워로 보여준다.
+	// 각도만 비교하려는 단계이므로 기준이 하나로 고정되는 편이 읽기 쉽다.
+	const pw = s.phase === PHASE_AIM ? 1 : POWER_MIN + (1 - POWER_MIN) * (s.powerIndex / 100);
+	const v = s.stats.launchSpeed * pw;
+	const a = aimAngleDeg(s.aimIndex) * DEG;
+	let x = 0;
+	let y = terrainHeightAt(s.seed, 0);
+	let vx = v * detCos(a);
+	let vy = v * detSin(a);
+
+	let n = 0;
+	for (let i = 0; i < maxPoints * framesPerPoint; i++) {
+		vy -= G * DT;
+		const d = s.stats.drag * DT;
+		vx -= vx * d;
+		vy -= vy * d;
+		x += vx * DT;
+		y += vy * DT;
+		if (i % framesPerPoint === 0) {
+			out[n * 2] = x;
+			out[n * 2 + 1] = y;
+			n++;
+			if (n >= maxPoints) break;
+		}
+		// 지면에 닿으면 거기서 끝낸다.
+		if (y <= terrainHeightAt(s.seed, x)) break;
+	}
+	return n;
+}
