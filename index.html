@@ -5,12 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>nyanfly</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <canvas id="stage"></canvas>
 <button id="btnMute" class="mute" type="button" aria-label="소리 켜기/끄기">소리 끄기</button>
 <pre id="perf" class="perf hidden"></pre>
+
+<!-- 모바일 세로 화면 안내. 보이고 숨는 것은 CSS 미디어 쿼리가 정한다. -->
+<div id="rotate" class="rotate" aria-live="polite">
+	<div class="rotate-icon" aria-hidden="true"></div>
+	<p>화면을 가로로 돌려 주세요</p>
+</div>
 
 <!-- 플레이 중 표시 -->
 <div id="hud" class="hud hidden">
@@ -81,6 +87,6 @@
 	</div>
 </section>
 
-<script type="module" src="js/main.js?v=5"></script>
+<script type="module" src="js/main.js?v=6"></script>
 </body>
 </html>

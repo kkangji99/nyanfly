@@ -23,12 +23,20 @@ let submitted = false;
 let acc = 0;          // 시뮬 누적 시간
 let lastMs = 0;
 
+// 모바일은 가로 화면에서만 게임한다. style.css의 .rotate 미디어 쿼리와 같은 조건이다.
+// 세로일 때는 안내가 화면을 덮고, 진행 중인 판은 시뮬을 세워 둔다.
+const PORTRAIT_QUERY = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+let portrait = PORTRAIT_QUERY.matches;
+PORTRAIT_QUERY.addEventListener('change', (e) => { portrait = e.matches; });
+const COARSE = window.matchMedia('(pointer: coarse)').matches;
+
 // 판마다 새 시드. 시드 자체는 결정론과 무관하게 골라도 된다.
 function newSeed() {
 	return (Math.random() * 0x7fffffff) | 0;
 }
 
 function startRun() {
+	lockLandscape();
 	sim = createSim(newSeed(), progress.levels);
 	resetView(view);
 	// 최고 기록 지점에 깃발을 꽂아 두면 그걸 넘는 순간이 눈에 보인다.
@@ -60,10 +68,30 @@ function finishRun() {
 function onPress() {
 	// 브라우저는 사용자 조작 전에 소리를 막으므로 첫 입력에서 열어 준다.
 	unlock();
-	if (!playing) return;
+	lockLandscape();
+	if (!playing || portrait) return;
 	// 게이지를 확정하는 소리. 발사 전 두 클릭에도 반응이 있어야 손맛이 산다.
 	if (sim.phase === PHASE_AIM || sim.phase === PHASE_POWER) sfxGauge();
 	click(sim);
+}
+
+// 가로 고정을 시도한다. 화면 방향 잠금은 전체 화면에서만 되고 사용자 조작 안에서
+// 불러야 하므로 입력 때 부른다. 지원하지 않는 브라우저(iOS Safari 등)는 조용히
+// 넘어가고, 그때는 세로 안내 화면이 가로로 돌리도록 이끈다.
+// 잠금이 한 번 거절되면 다시 시도하지 않는다. 탭마다 전체 화면을 들락거리면 안 된다.
+let lockState = 0;   // 0 시도 가능, 1 진행 중, 2 거절됨
+function lockLandscape() {
+	if (!COARSE || lockState !== 0 || document.fullscreenElement) return;
+	const el = document.documentElement;
+	if (!el.requestFullscreen || !screen.orientation || !screen.orientation.lock) {
+		lockState = 2;
+		return;
+	}
+	lockState = 1;
+	el.requestFullscreen({ navigationUI: 'hide' })
+		.then(() => screen.orientation.lock('landscape'))
+		.then(() => { lockState = 0; })
+		.catch(() => { lockState = 2; });
 }
 
 // 한 프레임의 일. 고정 타임스텝으로 시뮬을 돌리고 렌더는 실제 경과 시간으로 움직인다.
@@ -76,7 +104,9 @@ function advance(dt) {
 	if (playing) {
 		// 히트스톱 중에는 시뮬을 세우고 화면만 움직인다. 맞은 순간이 눈에 박히게
 		// 하는 연출이다. 시뮬의 프레임 번호는 그대로이므로 리플레이에는 영향이 없다.
-		if (view.hitstop <= 0) {
+		// 세로 안내가 덮고 있는 동안에는 시뮬도 세운다. 안 보이는 사이에 떨어지면 안 된다.
+		if (portrait) acc = 0;
+		else if (view.hitstop <= 0) {
 			acc += dt;
 			while (acc >= DT) {
 				step(sim);

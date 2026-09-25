@@ -235,6 +235,48 @@ button.primary:hover { background: #cf4926; }
 
 .note { margin: 0 0 14px; font-size: 13px; opacity: 0.65; }
 
+/* 모바일 세로 화면 안내. 터치 기기가 세로일 때만 게임 위를 덮는다.
+   js/main.js의 PORTRAIT_QUERY와 같은 조건이어야 한다. */
+.rotate { display: none; }
+
+@media (orientation: portrait) and (pointer: coarse) {
+	.rotate {
+		position: fixed;
+		inset: 0;
+		z-index: 20;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 18px;
+		background: #2b2118;
+		color: var(--paper);
+		font-size: 19px;
+		font-weight: 700;
+		text-align: center;
+		touch-action: none;
+	}
+	.rotate p { margin: 0; }
+	.rotate-icon {
+		width: 44px;
+		height: 76px;
+		border: 4px solid var(--paper);
+		border-radius: 9px;
+		animation: rotate-hint 1.8s ease-in-out infinite;
+	}
+}
+
+@keyframes rotate-hint {
+	0%, 20% { transform: rotate(0deg); }
+	55%, 100% { transform: rotate(-90deg); }
+}
+
+/* 가로로 눕힌 휴대폰은 세로 폭이 좁아 패널을 조금 줄인다. */
+@media (max-height: 480px) {
+	h1 { font-size: 34px; }
+	.panel { padding: 14px 18px; max-height: calc(100vh - 16px); }
+}
+
 @media (max-width: 420px) {
 	h1 { font-size: 36px; }
 	.panel { padding: 18px; }
