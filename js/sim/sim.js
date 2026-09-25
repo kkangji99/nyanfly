@@ -16,7 +16,7 @@ import {
 import { deriveStats } from './upgrades.js';
 
 // 시뮬 로직을 바꾸면 이 값을 올린다. 버전이 다른 리플레이는 재생하지 않는다.
-export const SIM_VERSION = 1;
+export const SIM_VERSION = 2;
 
 export const DT = 1 / 120;
 export const G = 1000;

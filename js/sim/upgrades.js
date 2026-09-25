@@ -28,9 +28,10 @@ export function deriveStats(levels) {
 	return {
 		// 발사 초속(px/s). 사거리는 속도의 제곱에 비례하므로 성장 체감이 가장 크다.
 		launchSpeed: 800 + L('power') * 200,
-		// 게이지 반주기(프레임). 낮을수록 빠르다.
-		aimPeriod: 54 + L('aim') * 7,
-		powerPeriod: 40 + L('aim') * 6,
+		// 게이지 반주기(프레임, 120fps). 낮을수록 빠르다.
+		// 무업 기준 각도 약 1.1초, 파워 약 0.9초에 한 번 끝까지 간다.
+		aimPeriod: 130 + L('aim') * 14,
+		powerPeriod: 105 + L('aim') * 12,
 		// 공기저항 계수(1/s)
 		drag: 0.45 - L('drag') * 0.045,
 		// 지면 반발계수
